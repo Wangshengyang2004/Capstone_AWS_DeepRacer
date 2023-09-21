@@ -4,6 +4,9 @@ import copy
 from shapely.geometry import LineString, Polygon, Point
 import matplotlib.pyplot as plt
 import os.path
+import argparse
+from datetime import datetime
+import os
 
 # Utility Functions
 
@@ -105,57 +108,55 @@ def plot_track(race_line, inner_border, outer_border):
     plt.show()
 
 
-# Main Program
-
-# Load the track
-available_track_files = glob.glob("*.npy")
-available_track_names = [os.path.basename(x).split('.npy')[0] for x in available_track_files]
-TRACK_NAME = available_track_names[1]  # Replace with the track you want to use
-waypoints = load_track(TRACK_NAME)
-
-# Reduce track width
-PERC_WIDTH = 0.8
-reduced_waypoints = reduce_track_width(waypoints, PERC_WIDTH)
-
-#Get border
-inner_border = waypoints[:, 2:4]
-outer_border = waypoints[:, 4:6]
-center_line = waypoints[:, 0:2]
-
-plot_track(center_line,inner_border,outer_border)
-# Improve the race line
-LINE_ITERATIONS = 100
-XI_ITERATIONS = 8
-race_line = np.array(reduced_waypoints)[:, 0:2]  # Initialize with center line
-for _ in range(LINE_ITERATIONS):
-    race_line = improve_race_line(
-        race_line,
-        reduced_waypoints[:, 2:4],
-        reduced_waypoints[:, 4:6],
-        XI_ITERATIONS
-    )
-
-# Plot the track
-plot_track(race_line, reduced_waypoints[:, 2:4], reduced_waypoints[:, 4:6])
-
-# Assume `improved_line` is the output from `improve_race_line`
-# Assume `inner_border` and `outer_border` are the inner and outer track boundaries
-# All are NumPy arrays of shape (N, 2)
-
-racing_track = []
-
-for i in range(len(race_line)):
-    waypoint = []
-    waypoint.extend(race_line[i])  # x, y of racing line
-    waypoint.extend(inner_border[i])  # x, y of inner border
-    waypoint.extend(outer_border[i])  # x, y of outer border
-    # Optionally, add any other information you want to store for each waypoint
-    racing_track.append(waypoint)
-
-# Convert to NumPy array for easier manipulation later, if needed
-racing_track = np.array(racing_track)
-
 def save_result(array):
-    np.save('./output/optimized_waypoints',array)
-    print("save successfully")
-save_result(race_line)
+    output_dir = './output'
+    os.makedirs(output_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'optimized_waypoints_{timestamp}.npy'
+    
+    np.save(os.path.join(output_dir, filename), array)
+    print(f"Saved successfully as {filename}")
+
+
+
+def main(track_file_path, perc_width=0.8, line_iterations=100, xi_iterations=8):
+    # Load the track
+    waypoints = load_track(track_file_path)
+
+    # Reduce track width
+    reduced_waypoints = reduce_track_width(waypoints, perc_width)
+
+    # Get border
+    inner_border = waypoints[:, 2:4]
+    outer_border = waypoints[:, 4:6]
+    center_line = waypoints[:, 0:2]
+    
+    plot_track(center_line, inner_border, outer_border)
+    
+    # Improve the race line
+    race_line = np.array(reduced_waypoints)[:, 0:2]  # Initialize with center line
+    for _ in range(line_iterations):
+        race_line = improve_race_line(
+            race_line,
+            reduced_waypoints[:, 2:4],
+            reduced_waypoints[:, 4:6],
+            xi_iterations
+        )
+
+    # Plot the track
+    plot_track(race_line, reduced_waypoints[:, 2:4], reduced_waypoints[:, 4:6])
+
+    # Save the result
+    save_result(race_line)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Optimize a race line.')
+    parser.add_argument('track_file', type=str, help='Path to the .npy file containing the track data.')
+    parser.add_argument('--perc_width', type=float, default=0.8, help='Percentage width to reduce the track by.')
+    parser.add_argument('--line_iterations', type=int, default=100, help='Number of iterations to improve the line.')
+    parser.add_argument('--xi_iterations', type=int, default=8, help='Number of iterations for xi.')
+    
+    args = parser.parse_args()
+    
+    main(args.track_file, args.perc_width, args.line_iterations, args.xi_iterations)
